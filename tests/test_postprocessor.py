@@ -1,6 +1,8 @@
 """Tests for post-processor."""
 
-from src.core.postprocessor import format_as_markdown, post_process_segments
+import pytest
+
+from src.core.postprocessor import format_as_markdown, generate_global_markdown, post_process_segments
 
 
 class TestPostProcessor:
@@ -50,3 +52,20 @@ class TestPostProcessor:
         result = post_process_segments(segments, mock_llm)
         # Second should reuse first's processing
         assert len(result) == 2
+
+
+class TestGenerateGlobalMarkdown:
+    """Tests for global markdown generation."""
+
+    def test_short_transcript_single_call(self, mock_llm, sample_grouped_segments):
+        """Short transcripts should be processed in a single LLM call."""
+        mock_llm.set_responses(["# Summary\n\nThis is a summary."])
+        result = generate_global_markdown(sample_grouped_segments, mock_llm, "summary")
+        assert "Summary" in result
+        assert mock_llm._call_count == 1
+
+    def test_empty_response_raises(self, mock_llm, sample_grouped_segments):
+        """Should raise RuntimeError when LLM returns empty."""
+        mock_llm.set_responses([""])
+        with pytest.raises(RuntimeError, match="LLM returned empty response"):
+            generate_global_markdown(sample_grouped_segments, mock_llm, "summary")

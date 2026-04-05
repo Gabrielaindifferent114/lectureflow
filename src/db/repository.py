@@ -30,6 +30,9 @@ class AnalysisRepository:
             return ""
         return str(value)
 
+    # Maximum markdown size to persist (10 MB).
+    _MAX_MARKDOWN_SIZE = 10 * 1024 * 1024
+
     def save_analysis(self, result: dict[str, Any]) -> int:
         """Save analysis results to database.
 
@@ -39,59 +42,71 @@ class AnalysisRepository:
         Returns:
             Analysis ID.
         """
+        markdown = result.get("markdown", "")
+        if len(markdown) > self._MAX_MARKDOWN_SIZE:
+            logger.warning(
+                "Markdown too large (%d bytes), truncating to %d bytes",
+                len(markdown), self._MAX_MARKDOWN_SIZE,
+            )
+            result = {**result, "markdown": markdown[: self._MAX_MARKDOWN_SIZE]}
+
         with self._lock:
             video_id = result["video_id"]
             url = result.get("url", "")
             title = result.get("title", "")
 
-            # Upsert video
-            self._conn.execute(
-                """INSERT INTO videos (video_id, url, title) VALUES (?, ?, ?)
-                   ON CONFLICT(video_id) DO UPDATE SET
-                       url=excluded.url,
-                       title=COALESCE(NULLIF(excluded.title, ''), videos.title),
-                       updated_at=CURRENT_TIMESTAMP""",
-                (video_id, url, title),
-            )
-
-            # Insert analysis
-            cursor = self._conn.execute(
-                """INSERT INTO analyses
-                   (video_id, mode, provider, model_name, language, skip_llm, segment_count, markdown)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    video_id,
-                    self._normalize_cache_value(result.get("mode", "detailed")),
-                    self._normalize_cache_value(result.get("provider")),
-                    self._normalize_cache_value(result.get("model_name")),
-                    self._normalize_cache_value(result.get("language")),
-                    1 if result.get("skip_llm") else 0,
-                    result.get("segment_count", 0),
-                    result.get("markdown", ""),
-                ),
-            )
-            analysis_id = cursor.lastrowid
-
-            # Insert segments
-            for i, seg in enumerate(result.get("segments", [])):
+            try:
+                # Upsert video
                 self._conn.execute(
-                    """INSERT INTO segments
-                       (analysis_id, start_time, end_time, text, topic,
-                        improved_topic, improved_text, segment_order)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        analysis_id,
-                        seg.get("start_time", 0),
-                        seg.get("end_time", 0),
-                        seg.get("text", ""),
-                        seg.get("topic"),
-                        seg.get("improved_topic"),
-                        seg.get("improved_text"),
-                        i,
-                    ),
+                    """INSERT INTO videos (video_id, url, title) VALUES (?, ?, ?)
+                       ON CONFLICT(video_id) DO UPDATE SET
+                           url=excluded.url,
+                           title=COALESCE(NULLIF(excluded.title, ''), videos.title),
+                           updated_at=CURRENT_TIMESTAMP""",
+                    (video_id, url, title),
                 )
 
-            self._conn.commit()
+                # Insert analysis
+                cursor = self._conn.execute(
+                    """INSERT INTO analyses
+                       (video_id, mode, provider, model_name, language, skip_llm, segment_count, markdown)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        video_id,
+                        self._normalize_cache_value(result.get("mode", "detailed")),
+                        self._normalize_cache_value(result.get("provider")),
+                        self._normalize_cache_value(result.get("model_name")),
+                        self._normalize_cache_value(result.get("language")),
+                        1 if result.get("skip_llm") else 0,
+                        result.get("segment_count", 0),
+                        result.get("markdown", ""),
+                    ),
+                )
+                analysis_id = cursor.lastrowid
+
+                # Insert segments
+                for i, seg in enumerate(result.get("segments", [])):
+                    self._conn.execute(
+                        """INSERT INTO segments
+                           (analysis_id, start_time, end_time, text, topic,
+                            improved_topic, improved_text, segment_order)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            analysis_id,
+                            seg.get("start_time", 0),
+                            seg.get("end_time", 0),
+                            seg.get("text", ""),
+                            seg.get("topic"),
+                            seg.get("improved_topic"),
+                            seg.get("improved_text"),
+                            i,
+                        ),
+                    )
+
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
         logger.info("Saved analysis %d for video %s", analysis_id, video_id)
         return analysis_id  # type: ignore[return-value]
 
@@ -410,6 +425,7 @@ class AnalysisRepository:
                 rows = []
 
         for row in rows:
+            row = dict(row)
             hay_title = str(row.get("title") or "").lower()
             hay_topic = f"{row.get('topic') or ''} {row.get('improved_topic') or ''}".lower()
             hay_text = f"{row.get('text') or ''} {row.get('improved_text') or ''}".lower()

@@ -12,6 +12,14 @@ from src.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _sanitize_language(lang: str | None) -> str | None:
+    """Strip language to only alphabetic characters and spaces (max 40 chars)."""
+    if not lang or lang.lower() in ("auto", ""):
+        return None
+    cleaned = re.sub(r"[^a-zA-Zа-яА-ЯёЁ\s\-]", "", lang)[:40].strip()
+    return cleaned or None
+
+
 def _clean_topic(topic: str) -> str:
     """Clean topic string for Markdown formatting.
 
@@ -118,15 +126,23 @@ def post_process_segments(
             continue
 
         try:
+            seg_text = segment["text"]
+            # Truncate oversized segments to avoid exceeding model context.
+            counter = llm_client._token_counter
+            if counter.count(seg_text) > 80_000:
+                seg_text = counter.truncate(seg_text, 80_000)
+                logger.warning("Truncated oversized segment %s to 80K tokens", key)
+
             prompt = template.format(
                 start_time=start_str,
                 end_time=end_str,
                 topic=segment.get("topic", ""),
-                text=segment["text"],
+                text=seg_text,
             )
 
-            if language and language.lower() not in ["auto", ""]:
-                prompt += f"\n\nCRITICAL MUST DO INSTRUCTION: You MUST translate and write ALL your response text entirely in {language}."
+            safe_lang = _sanitize_language(language)
+            if safe_lang:
+                prompt += f"\n\nCRITICAL MUST DO INSTRUCTION: You MUST translate and write ALL your response text entirely in {safe_lang}."
 
             response = llm_client.complete(prompt)
 
@@ -209,16 +225,9 @@ def generate_global_markdown(
         "Generating global markdown for mode '%s' with %d segments", mode, len(segments)
     )
 
-    try:
-        prompt = template.format(text=combined)
+    safe_lang = _sanitize_language(language)
+    if safe_lang:
+        template += f"\n\nCRITICAL MUST DO INSTRUCTION: You MUST translate and write ALL your generated Output entirely in {safe_lang} (all headings, bullet points, concepts, QA, etc)."
 
-        if language and language.lower() not in ["auto", ""]:
-            prompt += f"\n\nCRITICAL MUST DO INSTRUCTION: You MUST translate and write ALL your generated Output entirely in {language} (all headings, bullet points, concepts, QA, etc)."
-
-        response = llm_client.complete(prompt)
-        if not response:
-            raise RuntimeError("LLM returned empty response")
-        return _dedupe_generated_text(response)
-    except Exception as e:
-        logger.error("Error generating global markdown: %s", e)
-        raise
+    response = llm_client.complete_chunked(template, combined)
+    return _dedupe_generated_text(response)

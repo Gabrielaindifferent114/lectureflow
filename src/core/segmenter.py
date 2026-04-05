@@ -1,5 +1,6 @@
 """Semantic segmentation of transcript chunks."""
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from pathlib import Path
 
 import torch
@@ -7,6 +8,11 @@ import yaml
 from sentence_transformers import SentenceTransformer, util
 
 from src.utils.logger import get_logger
+
+# Maximum seconds to wait for embedding computation.
+_ENCODE_TIMEOUT = 300
+# Maximum characters per resolved segment (~20K tokens).
+_MAX_SEGMENT_CHARS = 80_000
 
 logger = get_logger(__name__)
 
@@ -49,8 +55,10 @@ class SemanticSegmenter:
                 config = yaml.safe_load(f)
                 seg_config = config.get("segmentation", {})
                 defaults.update(seg_config)
-        except (FileNotFoundError, yaml.YAMLError):
-            logger.debug("Using default segmentation config")
+        except FileNotFoundError:
+            logger.debug("Config file not found, using default segmentation config")
+        except yaml.YAMLError as e:
+            logger.warning("Failed to parse segmentation config, using defaults: %s", e)
 
         self.chunk_size: int = defaults["chunk_size"]
         self.similarity_threshold: float = defaults["similarity_threshold"]
@@ -86,7 +94,16 @@ class SemanticSegmenter:
         if not chunks:
             return []
 
-        embeddings = self.model.encode(chunks, convert_to_tensor=True)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self.model.encode, chunks, convert_to_tensor=True)
+            try:
+                embeddings = future.result(timeout=_ENCODE_TIMEOUT)
+            except FuturesTimeout:
+                future.cancel()
+                raise RuntimeError(
+                    f"Embedding computation timed out after {_ENCODE_TIMEOUT}s "
+                    f"({len(chunks)} chunks)"
+                )
 
         groups: list[list[int]] = []
         current_group = [0]
@@ -134,23 +151,42 @@ class SemanticSegmenter:
                 seg_indices.extend(range(start_idx, end_idx))
 
             seg_indices = sorted(set(seg_indices))
+            if not seg_indices:
+                continue
 
-            if seg_indices:
-                start_time = segments[seg_indices[0]][1]
-                last = segments[seg_indices[-1]]
-                end_time = last[1] + last[2]
-                text = " ".join(segments[idx][0] for idx in seg_indices)
+            # Split oversized groups into sub-groups that fit within
+            # _MAX_SEGMENT_CHARS to prevent downstream LLM failures.
+            sub_group: list[int] = []
+            char_count = 0
+            for idx in seg_indices:
+                seg_len = len(segments[idx][0])
+                if sub_group and char_count + seg_len > _MAX_SEGMENT_CHARS:
+                    results.append(self._build_segment(segments, sub_group))
+                    sub_group = []
+                    char_count = 0
+                sub_group.append(idx)
+                char_count += seg_len
 
-                results.append(
-                    {
-                        "start_time": start_time,
-                        "end_time": end_time,
-                        "text": text,
-                        "segment_count": len(seg_indices),
-                    }
-                )
+            if sub_group:
+                results.append(self._build_segment(segments, sub_group))
 
         return results
+
+    @staticmethod
+    def _build_segment(
+        segments: list[tuple[str, float, float]], indices: list[int]
+    ) -> dict:
+        """Build a segment dict from a list of raw segment indices."""
+        start_time = segments[indices[0]][1]
+        last = segments[indices[-1]]
+        end_time = last[1] + last[2]
+        text = " ".join(segments[idx][0] for idx in indices)
+        return {
+            "start_time": start_time,
+            "end_time": end_time,
+            "text": text,
+            "segment_count": len(indices),
+        }
 
     def segment(self, segments: list[tuple[str, float, float]]) -> list[dict]:
         """Full segmentation pipeline.

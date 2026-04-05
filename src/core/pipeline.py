@@ -1,5 +1,6 @@
 """Full analysis pipeline orchestrating all processing steps."""
 
+from collections import OrderedDict
 from copy import deepcopy
 from typing import Callable
 
@@ -13,6 +14,30 @@ from src.llm.factory import create_llm_client
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# Maximum number of entries in each in-memory cache.
+_MAX_CACHE_SIZE = 20
+
+
+class _LRUCache(OrderedDict):
+    """Simple LRU cache with a max size."""
+
+    def __init__(self, maxsize: int = _MAX_CACHE_SIZE) -> None:
+        super().__init__()
+        self._maxsize = maxsize
+
+    def get(self, key, default=None):  # noqa: D102
+        if key in self:
+            self.move_to_end(key)
+            return self[key]
+        return default
+
+    def __setitem__(self, key, value):  # noqa: D105
+        if key in self:
+            self.move_to_end(key)
+        super().__setitem__(key, value)
+        if len(self) > self._maxsize:
+            self.popitem(last=False)
 
 
 class AnalysisPipeline:
@@ -32,8 +57,8 @@ class AnalysisPipeline:
         self.segmenter = SemanticSegmenter()
         self.annotator = TopicAnnotator(model=self.segmenter.model)
         self.db = AnalysisRepository(db_path) if db_path else None
-        self._base_segments_cache: dict[str, list[dict]] = {}
-        self._result_cache: dict[tuple[str, str, str, str, str, bool], dict] = {}
+        self._base_segments_cache: _LRUCache = _LRUCache()
+        self._result_cache: _LRUCache = _LRUCache()
 
     @staticmethod
     def _get_provider_slug(client: BaseLLMClient) -> str:

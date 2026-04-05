@@ -62,7 +62,7 @@ def test_detailed_mode_uses_single_global_llm_pass(monkeypatch, mock_llm):
     monkeypatch.setattr(
         pipeline_module,
         "fetch_transcript",
-        lambda _url: [("raw", 0.0, 20.0)],
+        lambda _url, **kwargs: [("raw", 0.0, 20.0)],
     )
 
     called = {"global": 0, "segment": 0}
@@ -95,7 +95,7 @@ def test_exact_result_cache_reuses_completed_analysis(monkeypatch, mock_llm):
     transcript_calls = {"count": 0}
     global_calls = {"count": 0}
 
-    def fake_fetch(_url):
+    def fake_fetch(_url, **kwargs):
         transcript_calls["count"] += 1
         return [("raw", 0.0, 20.0)]
 
@@ -134,7 +134,7 @@ def test_persisted_exact_cache_reuses_saved_result(monkeypatch, mock_llm, temp_d
     transcript_calls = {"count": 0}
     global_calls = {"count": 0}
 
-    def fake_fetch(_url):
+    def fake_fetch(_url, **kwargs):
         transcript_calls["count"] += 1
         return [("raw", 0.0, 20.0)]
 

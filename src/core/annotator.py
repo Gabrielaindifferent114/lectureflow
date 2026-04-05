@@ -72,8 +72,8 @@ class TopicAnnotator:
             if sentences:
                 first = sentences[0]
                 return first[:50] + ("..." if len(first) > 50 else "")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("NLTK sentence tokenization failed: %s", e)
 
         return "Topic unavailable"
 

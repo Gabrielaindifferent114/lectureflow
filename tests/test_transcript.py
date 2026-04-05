@@ -139,7 +139,7 @@ class TestWhisperFallback:
         monkeypatch.setattr("src.core.transcript.YouTubeTranscriptApi", FakeApi)
         monkeypatch.setattr(
             "src.core.transcript.fetch_with_whisper",
-            lambda _url: whisper_segments,
+            lambda _url, **kwargs: whisper_segments,
         )
 
         result = fetch_transcript("https://www.youtube.com/watch?v=abc123def45")

@@ -71,13 +71,21 @@ class AnthropicClient(BaseLLMClient):
             LLMError: If Anthropic API call fails.
         """
         try:
+            self._rate_limiter.acquire()
             response = self._client.messages.create(
                 model=self.model_name,
                 max_tokens=self.max_tokens,
                 messages=messages,  # type: ignore[arg-type]
                 temperature=self.temperature,
             )
-            return response.content[0].text
+            content = response.content[0].text if response.content else ""
+            if not content:
+                logger.warning(
+                    "Anthropic returned empty content (stop_reason=%s, model=%s)",
+                    response.stop_reason,
+                    self.model_name,
+                )
+            return content
         except Exception as e:
             raise LLMError(f"Anthropic API error: {e}") from e
 

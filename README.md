@@ -16,7 +16,9 @@
   <img src="https://img.shields.io/badge/LLM-5_providers-green" alt="5 LLM Providers">
 </p>
 
-<!-- TODO: Add demo GIF or screenshot of the web UI -->
+<p align="center">
+  <img src="assets/docs/demoflow.png" alt="LectureFlow Demo Flow" width="980">
+</p>
 
 ## Why LectureFlow
 

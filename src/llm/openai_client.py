@@ -74,6 +74,7 @@ class OpenAIClient(BaseLLMClient):
             LLMError: If OpenAI API call fails.
         """
         try:
+            self._rate_limiter.acquire()
             params: dict = {
                 "model": self.model_name,
                 "messages": messages,
@@ -90,7 +91,15 @@ class OpenAIClient(BaseLLMClient):
                 params["max_tokens"] = self.max_tokens
                 params["temperature"] = self.temperature
             response = self._client.chat.completions.create(**params)
-            return response.choices[0].message.content or ""
+            content = response.choices[0].message.content or ""
+            if not content:
+                finish = response.choices[0].finish_reason
+                logger.warning(
+                    "OpenAI returned empty content (finish_reason=%s, model=%s)",
+                    finish,
+                    self.model_name,
+                )
+            return content
         except Exception as e:
             raise LLMError(f"OpenAI API error: {e}") from e
 

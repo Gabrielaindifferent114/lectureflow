@@ -1,6 +1,7 @@
 """YouTube transcript fetching and preprocessing."""
 
 from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 import os
 import re
 import shutil
@@ -75,28 +76,44 @@ def get_video_id(youtube_url: str) -> str:
     raise TranscriptError(f"Invalid YouTube URL: {youtube_url}")
 
 
-def fetch_video_metadata(youtube_url: str) -> dict[str, str]:
-    """Fetch lightweight YouTube metadata without downloading media."""
+def fetch_video_metadata(youtube_url: str, max_retries: int = 2) -> dict[str, str]:
+    """Fetch lightweight YouTube metadata without downloading media.
+
+    Retries on transient failures before falling back to defaults.
+    """
     video_id = get_video_id(youtube_url)
     thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+    fallback = {"title": video_id, "thumbnail_url": thumbnail_url}
 
-    try:
-        import yt_dlp
+    import time
 
-        ydl_opts = {
-            **_get_yt_dlp_base_opts(),
-            "skip_download": True,
-            "extract_flat": True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(youtube_url, download=False) or {}
-        return {
-            "title": str(info.get("title") or video_id),
-            "thumbnail_url": str(info.get("thumbnail") or thumbnail_url),
-        }
-    except Exception as e:
-        logger.warning("Failed to fetch video metadata for %s: %s", youtube_url, e)
-        return {"title": video_id, "thumbnail_url": thumbnail_url}
+    for attempt in range(1, max_retries + 2):
+        try:
+            import yt_dlp
+
+            ydl_opts = {
+                **_get_yt_dlp_base_opts(),
+                "skip_download": True,
+                "extract_flat": True,
+                "socket_timeout": 15,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(youtube_url, download=False) or {}
+            return {
+                "title": str(info.get("title") or video_id),
+                "thumbnail_url": str(info.get("thumbnail") or thumbnail_url),
+            }
+        except Exception as e:
+            if attempt <= max_retries:
+                logger.warning(
+                    "Metadata fetch attempt %d/%d failed for %s: %s",
+                    attempt, max_retries + 1, youtube_url, e,
+                )
+                time.sleep(1.0 * attempt)
+            else:
+                logger.warning("Failed to fetch video metadata for %s after %d attempts: %s", youtube_url, attempt, e)
+                return fallback
+    return fallback
 
 
 def fetch_youtube_recommendations(query: str, exclude_video_id: str = "", limit: int = 6) -> list[dict[str, str]]:
@@ -304,6 +321,23 @@ def _build_transcript_candidates(transcript_list) -> list:
     return candidates
 
 
+def _get_video_duration(youtube_url: str) -> float | None:
+    """Return video duration in seconds via yt-dlp metadata, or None on failure."""
+    try:
+        import yt_dlp
+
+        opts = {**_get_yt_dlp_base_opts(), "skip_download": True}
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=False) or {}
+        return float(info["duration"]) if info.get("duration") else None
+    except Exception:
+        return None
+
+
+# Maximum video duration (in seconds) allowed for Whisper fallback.
+_MAX_WHISPER_DURATION = 3 * 3600  # 3 hours
+
+
 def fetch_with_whisper(
     youtube_url: str,
     progress_callback: Callable[[str, int, str], None] | None = None,
@@ -327,6 +361,15 @@ def fetch_with_whisper(
             "Whisper & yt-dlp are required for fallback. Please run: pip install openai-whisper yt-dlp"
         ) from e
 
+    # Guard against extremely long videos that would hang the server.
+    duration = _get_video_duration(youtube_url)
+    if duration is not None and duration > _MAX_WHISPER_DURATION:
+        raise TranscriptError(
+            f"Video is too long for Whisper fallback ({duration / 3600:.1f}h, "
+            f"max {_MAX_WHISPER_DURATION / 3600:.0f}h). "
+            "Please use a video with available subtitles."
+        )
+
     logger.info(
         "Falling back to Whisper to transcribe audio. This might take a while..."
     )
@@ -337,14 +380,16 @@ def fetch_with_whisper(
             "Transcript unavailable. Switching to Whisper audio transcription...",
         )
 
-    with tempfile.TemporaryDirectory() as tmpdir:
+    tmpdir = tempfile.mkdtemp()
+    try:
         audio_path = os.path.join(tmpdir, "audio.m4a")
 
-        # 1. Download audio via yt-dlp
+        # 1. Download audio via yt-dlp (timeout via socket_timeout)
         ydl_opts = {
             **_get_yt_dlp_base_opts(),
             "format": "m4a/bestaudio/best",
             "outtmpl": audio_path,
+            "socket_timeout": 60,
         }
         if progress_callback:
             progress_callback(
@@ -407,6 +452,9 @@ def fetch_with_whisper(
             text = segment["text"]
             segments.append((text, start, duration))
 
+        # Release model before temp dir cleanup to avoid file-lock races.
+        del model
+
         if not segments:
             raise TranscriptError("Whisper could not generate any transcript.")
 
@@ -414,6 +462,12 @@ def fetch_with_whisper(
 
         # We can also preprocess to merge tiny Whisper segments if needed
         return preprocess_segments(segments)
+    finally:
+        # Best-effort cleanup; ignore errors (e.g., file still locked on Windows).
+        try:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        except Exception:
+            pass
 
 
 def fetch_transcript(
@@ -446,7 +500,12 @@ def fetch_transcript(
                     getattr(transcript, "language_code", "unknown"),
                     getattr(transcript, "is_generated", "unknown"),
                 )
-                transcript_data = transcript.fetch()
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    future = pool.submit(transcript.fetch)
+                    try:
+                        transcript_data = future.result(timeout=60)
+                    except FuturesTimeout:
+                        raise TranscriptError("Transcript fetch timed out after 60s")
                 if not transcript_data:
                     raise TranscriptError("Transcript data is empty.")
 

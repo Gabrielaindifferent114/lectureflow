@@ -1,5 +1,9 @@
 """Tests for database repository."""
 
+from unittest.mock import patch
+
+import pytest
+
 from src.db.repository import AnalysisRepository
 
 
@@ -50,8 +54,8 @@ class TestAnalysisRepository:
         repo = AnalysisRepository(temp_db)
         repo.save_analysis(
             {
-                "video_id": "vid1",
-                "url": "https://youtube.com/watch?v=vid1",
+                "video_id": "vid1_abc_01",
+                "url": "https://youtube.com/watch?v=vid1_abc_01",
                 "segment_count": 1,
                 "markdown": "test",
                 "segments": [{"start_time": 0, "end_time": 10, "text": "test"}],
@@ -59,8 +63,8 @@ class TestAnalysisRepository:
         )
         repo.save_analysis(
             {
-                "video_id": "vid2",
-                "url": "https://youtube.com/watch?v=vid2",
+                "video_id": "vid2_abc_02",
+                "url": "https://youtube.com/watch?v=vid2_abc_02",
                 "segment_count": 1,
                 "markdown": "test2",
                 "segments": [{"start_time": 0, "end_time": 10, "text": "test2"}],
@@ -75,8 +79,8 @@ class TestAnalysisRepository:
         repo = AnalysisRepository(temp_db)
         repo.save_analysis(
             {
-                "video_id": "search_test",
-                "url": "https://youtube.com/watch?v=search_test",
+                "video_id": "srch_test01",
+                "url": "https://youtube.com/watch?v=srch_test01",
                 "segment_count": 2,
                 "markdown": "test",
                 "segments": [
@@ -120,8 +124,8 @@ class TestAnalysisRepository:
         for i in range(2):
             repo.save_analysis(
                 {
-                    "video_id": "same_vid",
-                    "url": "https://youtube.com/watch?v=same_vid",
+                    "video_id": "same_vid_01",
+                    "url": "https://youtube.com/watch?v=same_vid_01",
                     "segment_count": 1,
                     "markdown": f"version {i}",
                     "segments": [{"start_time": 0, "end_time": 10, "text": f"v{i}"}],
@@ -129,12 +133,55 @@ class TestAnalysisRepository:
             )
 
         # Both analyses exist, one is returned
-        result = repo.get_analysis("same_vid")
+        result = repo.get_analysis("same_vid_01")
         assert result is not None
-        assert result["video_id"] == "same_vid"
+        assert result["video_id"] == "same_vid_01"
         assert result["markdown"] in ("version 0", "version 1")
 
         # Video appears only once in list
         videos = repo.list_videos()
         assert len(videos) == 1
+        repo.close()
+
+    def test_rollback_on_segment_insert_failure(self, temp_db):
+        """If segment insert fails, the whole transaction should roll back."""
+        repo = AnalysisRepository(temp_db)
+
+        bad_result = {
+            "video_id": "rollback_01",
+            "url": "https://youtube.com/watch?v=rollback_01",
+            "segment_count": 1,
+            "markdown": "test",
+            "segments": [
+                {"start_time": 0, "end_time": 10, "text": "good segment"},
+                # Bad segment — missing required fields will cause SQL error
+                None,
+            ],
+        }
+
+        with pytest.raises(Exception):
+            repo.save_analysis(bad_result)
+
+        # Analysis should NOT be persisted after rollback
+        assert repo.get_analysis("rollback_01") is None
+        repo.close()
+
+    def test_markdown_size_truncation(self, temp_db):
+        """Oversized markdown should be truncated before insert."""
+        repo = AnalysisRepository(temp_db)
+        huge_markdown = "x" * (12 * 1024 * 1024)  # 12 MB
+
+        repo.save_analysis(
+            {
+                "video_id": "big_md_test",
+                "url": "https://youtube.com/watch?v=big_md_test",
+                "segment_count": 0,
+                "markdown": huge_markdown,
+                "segments": [],
+            }
+        )
+
+        loaded = repo.get_analysis("big_md_test")
+        assert loaded is not None
+        assert len(loaded["markdown"]) <= repo._MAX_MARKDOWN_SIZE
         repo.close()

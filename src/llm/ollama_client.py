@@ -44,6 +44,7 @@ class OllamaClient(BaseLLMClient):
             LLMError: If Ollama API call fails.
         """
         try:
+            self._rate_limiter.acquire()
             response = requests.post(
                 f"{self.base_url}/api/generate",
                 json={
@@ -59,7 +60,12 @@ class OllamaClient(BaseLLMClient):
             )
             response.raise_for_status()
             result = response.json()
-            return result.get("response", "")
+            content = result.get("response", "")
+            if not content:
+                logger.warning(
+                    "Ollama returned empty content (model=%s)", self.model_name
+                )
+            return content
         except requests.RequestException as e:
             raise LLMError(f"Ollama API error: {e}") from e
 
@@ -78,6 +84,7 @@ class OllamaClient(BaseLLMClient):
             LLMError: If Ollama API call fails.
         """
         try:
+            self._rate_limiter.acquire()
             response = requests.post(
                 f"{self.base_url}/api/chat",
                 json={
@@ -93,7 +100,12 @@ class OllamaClient(BaseLLMClient):
             )
             response.raise_for_status()
             result = response.json()
-            return result.get("message", {}).get("content", "")
+            content = result.get("message", {}).get("content", "")
+            if not content:
+                logger.warning(
+                    "Ollama chat returned empty content (model=%s)", self.model_name
+                )
+            return content
         except requests.RequestException as e:
             raise LLMError(f"Ollama chat error: {e}") from e
 
